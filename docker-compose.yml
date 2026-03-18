@@ -1,0 +1,8 @@
+services:
+
+  api:
+    image: consolejay/research-center-quality-classification:v1
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./model/artifacts/kmeans_pipeline_model.pkl:/app/kmeans_pipeline_model.pkl
