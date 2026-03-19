@@ -96,9 +96,15 @@ python3 train.py
 
 This saves the trained model to `model/artifacts/kmeans_pipeline_model.pkl`.
 
-> For the full exploratory data analysis and model training walkthrough, open `EDA_and_Model.ipynb`.
+> For the full exploratory data analysis and model training walkthrough, open `EDA_and_Model.ipynb`. When the notebook is run it saves it in the main folder but using the train.py saves it into the model/artifact folder for further use.
+
 
 **Step 4 — Start the API**
+
+The process in the app.py explained. 
+
+>The fastapi is instantiated, then the saved model(pipeline and the column names of the selected features) is loaded to the file. This saved model
+ defines the expected input schema which is the *RecearchCenterData* class to match our selected features, sets up a health check endpoint, processes incoming prediction requests by converting input data into a DataFrame, uses the model to predict a cluster, maps it to a quality category, returns the result as JSON, and runs the API server using Uvicorn.
 
 ```bash
 python3 app.py
@@ -126,25 +132,29 @@ curl -X POST http://localhost:8000/predict \
 
 Follow these steps if you want to build and publish your own Docker image.
 
-**Step 1 — Build the image**
+
+**Step 1 — Build the Dockerfile**
+>The Dockerfile builds a lightweight Python container, sets environment variables, installs dependencies, copies the app code, trains and saves the model, exposes port 8000, and runs the FastAPI application using Uvicorn.
+
+**Step 2 — Build the image**
 
 ```bash
 docker build -t research-center-quality-classification .
 ```
 
-**Step 2 — Verify the image was created**
+**Step 3 — Verify the image was created**
 
 ```bash
 docker images | grep research-center-quality-classification
 ```
 
-**Step 3 — Run the image locally**
+**Step 4 — Run the image locally**
 
 ```bash
 docker run -d -p 8000:8000 research-center-quality-classification
 ```
 
-**Step 4 — Test the running container**
+**Step 5 — Test the running container**
 
 ```bash
 curl -X POST http://localhost:8000/predict \
@@ -210,36 +220,25 @@ The pre-built image is available on Docker Hub and used as image in the docker-c
 consolejay/research-center-quality-classification:v1
 ```
 
-## Extending the Endpoints
+## How Can the Endpoint Be Extended for Continuous Retraining?
 
-The current endpoint accepts inference data, returns a predicted cluster and category, and discards the request data immediately after. To support continuous retraining, the endpoint must be extended across four layers, each building on the previous one.
+The FastAPI endpoint has already been containerised and pushed to Docker Hub. Extending it for continuous retraining requires four additions. First, PostgreSQL is added as a second container via Docker Compose to persist every inference request and prediction. This gives the system a memory it currently lacks. Second, a retraining endpoint is added to the API that accepts a manual or automated trigger and runs the retraining pipeline in the background without interrupting live predictions. Third, MLflow is introduced as a third container to version every retrained model, track silhouette scores across runs, and manage model stages ensuring only a better performing model ever reaches production and any version can be rolled back instantly. Fourth, retraining is automated by triggering every one thousand predictions, replacing the need for manual intervention entirely. Together these additions transform the static endpoint into a self improving system where real world data continuously shapes model performance.
 
-Layer 1 — Persistent Data Collection
-The first extension is giving the system a memory. Every prediction request that passes through the endpoint contains real world data that reflects current patterns. Rather than discarding this data after each response, the endpoint is extended to log every request and its corresponding prediction to a PostgreSQL database. Over time this builds a dataset of real world inference data that can be used to retrain the model. Without this layer, continuous retraining is impossible because there is no data to train on.
+How Can the Endpoint Be Extended for Continuous Retraining?
+The FastAPI endpoint has already been containerised and pushed to Docker Hub. Extending it for continuous retraining requires four additions. First, Amazon RDS for PostgreSQL is introduced to persist every inference request and prediction, giving the system a permanent memory. Second, a retraining endpoint is added to the API that accepts a manual or automated trigger and runs the retraining pipeline in the background without interrupting live predictions. Third, MLflow running on AWS is introduced to version every retrained model, track silhouette scores across runs, and manage model stages ensuring only a better performing model ever reaches production and any version can be rolled back instantly. Fourth, retraining is automated by triggering every one thousand predictions, replacing the need for manual intervention entirely. Together these additions transform the static endpoint into a self improving system where real world data continuously shapes model performance.
 
-Layer 2 — A Dedicated Retraining Endpoint
-The second extension is adding a separate retraining endpoint to the API. This endpoint accepts a trigger — either from a human operator or an automated system — and initiates a retraining job in the background. Running retraining in the background is important because it allows the API to continue serving predictions without interruption while the new model is being trained. This endpoint connects directly to the logged data in PostgreSQL, fetches the most recent records, and retrains the model on that data.
+## How to Commercialise and Scale the Solution
+### Commercialisation
+The most natural commercial fit is an API as a Service model targeting organisations that assess research facility quality at scale — government funding bodies, academic institutions, and infrastructure consultancies. Each customer receives a unique API key, usage is metered per prediction, and billing is automated through Stripe or the AWS Marketplace Metering Service for enterprise customers. A Software as a Service layer wrapping the API in a dashboard would extend the customer base to non-technical decision makers who need cluster visualisations and downloadable reports without interacting with the endpoint directly.
 
-Layer 3 — Hot Model Swapping
-The third extension addresses how the newly trained model is loaded into production. In the current setup, updating the model requires rebuilding and redeploying the entire container. Instead, a model reload endpoint is added that instructs the running API to load the newly trained model from disk without any restart or redeployment. This means the transition from an old model to a new one is seamless and invisible to the end user.
+### Scaling — Two Paths Depending on Infrastructure Preference
+At scale the single Docker container is insufficient and the solution can be scaled through two complementary approaches.
+The first is Kubernetes with KServe. The Docker image stored in Amazon ECR is deployed onto Amazon EKS where KServe replaces the FastAPI serving layer entirely. KServe automatically generates a standardised prediction endpoint, scales containers up and down with traffic, and scales to zero during off-peak periods eliminating unnecessary compute costs. When a retrained model is promoted to production in MLflow, KServe picks it up automatically through a canary deployment  routing a small percentage of traffic to the new model before fully switching over. If the new model underperforms, rollback is instant with a single command.
 
-Layer 4 — Automated Retraining Triggers
-The fourth extension removes the need for manual intervention entirely. Rather than requiring someone to call the retraining endpoint manually, the system monitors its own state and triggers retraining automatically. There are three approaches to this. The simplest is schedule based retraining, where retraining fires on a fixed schedule such as every week regardless of data changes. A more intelligent approach is volume based retraining, where retraining triggers automatically once a certain number of new predictions have been collected — for example every one thousand predictions. The most sophisticated approach is drift based retraining, where the system monitors the statistical distribution of incoming data and triggers retraining only when that distribution shifts significantly away from what the model was originally trained on. This final approach ensures the model is only retrained when it genuinely needs to be updated.
-
+The second is AWS SageMaker. For teams preferring fully managed infrastructure, Amazon SageMaker Endpoints replace KServe for model serving, SageMaker Pipelines replace Kubeflow for pipeline orchestration, and SageMaker Model Monitor replaces Evidently AI for drift detection. SageMaker connects natively to the MLflow model registry meaning a promoted model triggers an automatic endpoint update without manual intervention. Amazon CloudWatch handles infrastructure monitoring while SageMaker Model Monitor compares live prediction distributions against the training baseline and raises alerts when drift is detected.
+Both approaches support canary deployments, instant rollback, auto scaling, and continuous retraining. The KServe path offers more control and avoids vendor lock-in. The SageMaker path reduces operational overhead for teams who prefer managed services over self hosted infrastructure.
 The Result
-When all four layers are combined, the endpoint evolves from a static prediction service into a self improving system. Real world data is continuously collected, the model is periodically retrained on the most recent patterns, the best performing model is automatically promoted to production, and the entire cycle runs without manual intervention. The model therefore improves over time as more real world data flows through the system.
-
-## How to Commercialize and Scale the Solution 
-Commercialization
-The natural buyers are organisations that need to evaluate or compare research facilities at scale — such as government bodies, academic institutions, and research consultancies. Three commercial models apply: API as a Service where customers are charged per prediction or on a subscription, Software as a Service where a user interface removes the technical barrier for non-technical buyers, and a vertical product model where the solution is packaged for a specific industry commanding higher prices. Regardless of the model chosen, the commercial foundation requires API key management, usage metering, and automated billing through a tool such as Stripe.
-
-Scaling With KServe
-The current single container setup is insufficient for production. KServe is a purpose built model serving platform that runs on Kubernetes and replaces the manual FastAPI serving layer entirely. Registering the model with KServe automatically generates a standardised endpoint, handles scaling, manages model versions, and monitors predictions without additional code.
-At the infrastructure layer KServe scales containers automatically based on traffic and can scale to zero when no requests are arriving, meaning compute costs are only incurred when predictions are being served. At the model management layer KServe handles multiple versions simultaneously using canary deployments, routing a small percentage of traffic to a new model before fully switching over. If the new model underperforms, KServe rolls back instantly. At the retraining layer KServe integrates directly with MLflow for model versioning and Kubeflow for pipeline orchestration, meaning a retrained model is picked up and served automatically without manual intervention. For monitoring, prediction metrics feed into Prometheus and Grafana while Evidently AI handles data drift detection and retraining alerts.
-
-The Result
-KServe transforms the solution into a fully automated, commercially viable platform. Models improve continuously, deployments are safe through canary releases and instant rollback, infrastructure costs are minimised through scale to zero, and the system is capable of serving thousands of customers simultaneously with minimal manual intervention.
-
+Whether deployed through KServe on EKS or through SageMaker managed services, the research center quality classification system evolves from a static Docker container into a fully automated commercial platform. Models improve continuously from real world data, deployments are safe through canary releases and instant rollback, infrastructure costs are minimised through scale to zero, and the system is capable of serving thousands of customers simultaneously with minimal manual intervention.
 
 
 
