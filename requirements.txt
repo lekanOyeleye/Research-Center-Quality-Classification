@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pandas
+numpy
+scikit-learn
+matplotlib
+seaborn
+joblib
+dvc
+dvc-s3
+psycopg2-binary
+pytest
+httpx
