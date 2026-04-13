@@ -1,41 +1,9 @@
-
-# Python cache
-
-__pycache__/
-*.py[cod]
-*$py.class
-
-
-# Virtual environments
-
-venv/
 .venv/
-env/
-
-
-# Environment variables
-
+__pycache__/
+*.pyc
 .env
-.env.*
-
-
-# Git
-
-.git
+tests/
+.git/
 .gitignore
-
-
-# Jupyter
-
-.ipynb_checkpoints/
-
-
-# Model artifacts (large files)
-model/artifacts/
-*.pkl
-*.joblib
-
-
-# Images
-
-*.png
+README.md
+research_centers.csv
