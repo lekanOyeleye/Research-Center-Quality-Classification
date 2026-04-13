@@ -1,6 +1,6 @@
 """FastAPI inference server for Research Center Quality Classification"""
 from fastapi import FastAPI
-from pydantic import BaseModel
+from src.schemas.research_center import ResearchCenterData
 import numpy as np
 import pandas as pd
 import joblib
@@ -11,13 +11,6 @@ app = FastAPI()
 # Load your saved pipeline
 saved_process = joblib.load('./model/artifacts/kmeans_pipeline_model.pkl')
 
-
-class RecearchCenterData(BaseModel):
-    internalFacilitiesCount: float
-    hospitals_10km: float
-    pharmacies_10km: float
-    facilityDiversity_10km: float
-    facilityDensity_10km: float
 
 
 @app.get("/health")
