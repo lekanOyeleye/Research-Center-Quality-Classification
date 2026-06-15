@@ -1,0 +1,45 @@
+executor: "LocalExecutor"
+postgresql:
+  enabled: true
+  image:
+    repository: bitnamilegacy/postgresql
+    tag: latest
+redis:
+  enabled: false
+dags:
+  gitSync:
+    enabled: false
+  persistence:
+    enabled: false
+config:
+  webserver:
+    secret_key: "ZZfv1UcNa9GVBLYMh88amaLNrTXa3Ab5"
+webserver:
+  service:
+    type: ClusterIP
+  extraVolumes:
+    - name: dag-volume
+      configMap:
+        name: airflow-dags
+  extraVolumeMounts:
+    - name: dag-volume
+      mountPath: /opt/airflow/dags/research_center_dag.py
+      subPath: research_center_dag.py
+scheduler:
+  extraVolumes:
+  - name: dag-volume
+    configMap:
+      name: airflow-dags
+  extraVolumeMounts:
+    - name: dag-volume
+      mountPath: /opt/airflow/dags/research_center_dag.py
+      subPath: research_center_dag.py
+dagProcessor:
+  extraVolumes:
+  - name: dag-volume
+    configMap:
+      name: airflow-dags
+  extraVolumeMounts:
+    - name: dag-volume
+      mountPath: /opt/airflow/dags/research_center_dag.py
+      subPath: research_center_dag.py

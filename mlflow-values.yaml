@@ -1,0 +1,12 @@
+artifactRoot:
+  defaultArtifactRoot: /tmp/mlartifacts
+backendStore:
+  databaseMigration: true
+extraFlags:
+- serve-artifacts
+postgresql:
+  auth:
+    database: mlflow
+    password: password
+    username: mlflow
+  enabled: true
